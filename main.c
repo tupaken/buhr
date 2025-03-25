@@ -18,7 +18,7 @@ int main () {
     EICRA |=~(1<<ISC10);
     DDRD &= ~(1 << PD4);
     PORTD |= (1 << PD4);
-    LEDS();
+    start_test();
     sei();
     timer2_init();
     while (1) {
@@ -84,4 +84,59 @@ void check_hours(){
     else{
         zustand_hours=(zustand_hours+1);
     }
+}
+
+void start_test(){
+    //Test Minutes Leds
+    PORTD |=(0b1<<PD0);
+    _delay_ms(3000);
+    PORTD &=~(0b1<<PD0);
+    _delay_ms(3000);
+    PORTD |=(0b1<<PD1);
+    _delay_ms(3000);
+    PORTD &=~(0b1<<PD1);
+    _delay_ms(3000);
+    PORTB |=(0b1<<PB0);
+    _delay_ms(3000);
+    PORTB &=~(0b1<<PB0);
+    _delay_ms(3000);
+    PORTD |=(0b1<<PD7);
+    _delay_ms(3000);
+    PORTD &=~(0b1<<PD7);
+    _delay_ms(3000);
+    PORTB |=(0b1<<PB1);
+    _delay_ms(3000);
+    PORTB &=~(0b1<<PB1);
+    _delay_ms(3000);
+    PORTB |=(0b1<<PB2);
+    _delay_ms(3000);
+    PORTB &=~(0b1<<PB2);
+
+    //Test Hours Leds
+    for (int i=0;i<=5;i++){
+    _delay_ms(3000);
+    PORTC |=(0b1<<i);
+    _delay_ms(3000);
+    PORTC &=~(0b1<<i);
+    }
+    confirmation();
+    _delay_ms(1500);
+    confirmation();
+
+}
+
+void confirmation(){
+    PORTB |= (PORTB & ~(0b111111<<PB0)|((0b111111>>2 &1)<<PB0)|
+    ((0b111111>>4 &1)<<PB1)|((0b111111>>5 &1)<<PB2));
+    PORTD |= (PORTD & ~((1 << PD0) | (1 << PD1) | (1 << PD7))) | 
+    ((0b111111 & 0b00000011) << PD0) |        
+    ((0b111111 & 0b00001000) << (PD7 - 3));
+    //Ledsanschatung Hours   
+    PORTC |= (PORTC & ~(0b11111 << PC1)) | ((0b11111 << PC1)& 0xFF);
+    _delay_ms(3000);
+    PORTB &= (PORTB & ~(0b111111<<PB0));
+    PORTD &= (PORTD & ~(0b11 << PD0)& ~(0b1 << PD7));
+    //Ledsanschatung Hours   
+    PORTC &= (PORTC & ~(0b11111 << PC1));
+
 }
