@@ -10,6 +10,7 @@ volatile uint8_t zustand_hours   = 0b00000;
 // СДЕЛАЙ
 volatile uint8_t zustand_minutes = 0b00000;
 volatile uint8_t sleepflag       = 0;
+volatile uint8_t brightness      = 128;
 
 // Прерывание таймера 2 (CTC) — считает секунды
 ISR(TIMER2_COMPA_vect){
@@ -138,10 +139,46 @@ ISR(INT0_vect){
     if (!sleepflag){
         LEDS();
     }
+    else {
+        // Принудительно очистить порты перед сном
+        PORTB &= ~(0b111 << PB0);
+        PORTD &= ~((1<<PD0)|(1<<PD1)|(1<<PD7));
+        PORTC &= ~(0b11111 << PC1);
+    }
 }
 
-// Функция ухода в сон
-void go_sleep(){
+ISR(INT1_vect){
+    brightness += 51; // шаг изменения яркости (~20%)
+    if(brightness > 255) brightness = 0;
+}
+
+void software_pwm(){
+    for(uint8_t i=0;i<255;i++){
+        // MINUTEN (PORTB)
+        if(i < brightness && (zustand_minutes & (1<<2))) PORTB |= (1<<PB0); else PORTB &= ~(1<<PB0);
+        if(i < brightness && (zustand_minutes & (1<<4))) PORTB |= (1<<PB1); else PORTB &= ~(1<<PB1);
+        if(i < brightness && (zustand_minutes & (1<<5))) PORTB |= (1<<PB2); else PORTB &= ~(1<<PB2);
+
+        // MINUTEN (PORTD)
+        if(i < brightness && (zustand_minutes & (1<<0))) PORTD |= (1<<PD0); else PORTD &= ~(1<<PD0);
+        if(i < brightness && (zustand_minutes & (1<<1))) PORTD |= (1<<PD1); else PORTD &= ~(1<<PD1);
+        if(i < brightness && (zustand_minutes & (1<<3))) PORTD |= (1<<PD7); else PORTD &= ~(1<<PD7);
+
+        // STUNDEN (PORTC)
+        if(i < brightness && (zustand_hours & (1<<0))) PORTC |= (1<<PC1); else PORTC &= ~(1<<PC1);
+        if(i < brightness && (zustand_hours & (1<<1))) PORTC |= (1<<PC2); else PORTC &= ~(1<<PC2);
+        if(i < brightness && (zustand_hours & (1<<2))) PORTC |= (1<<PC3); else PORTC &= ~(1<<PC3);
+        if(i < brightness && (zustand_hours & (1<<3))) PORTC |= (1<<PC4); else PORTC &= ~(1<<PC4);
+        if(i < brightness && (zustand_hours & (1<<4))) PORTC |= (1<<PC5); else PORTC &= ~(1<<PC5);
+
+        _delay_us(30);  // около 130 Гц
+    }
+}
+
+
+
+
+void go_sleep(){   // Функция ухода в сон
     // Вы обнуляете здесь все порты,
     PORTB &= (PORTB & ~(0b111111 << PB0));
     PORTD &= (PORTD & ~(0b11 << PD0) & ~(0b1 << PD7));
@@ -157,67 +194,32 @@ void go_sleep(){
     sleep_disable(); // Возврат после пробуждения
 }
 
-int main (){
-    // --- Настройка портов ---
-    DDRB |= (1 << PB0) | (1 << PB1) | (1 << PB2);    // Minutes 110100
-    DDRC |= (1 << PC5) | (1 << PC4) | (1 << PC3)
-          | (1 << PC2) | (1 << PC1);                // Hours
+int main(){
+    DDRB |= (1<<PB0)|(1<<PB1)|(1<<PB2);
+    DDRC |= (1<<PC1)|(1<<PC2)|(1<<PC3)|(1<<PC4)|(1<<PC5);
+    DDRD |= (1<<PD0)|(1<<PD1)|(1<<PD7)|(1<<PD5)|(1<<PD6);
 
-    // Button Sleep на PD2 (INT0)
-    DDRD &= ~(1 << PD2); 
-    PORTD |= (1 << PD2);
-    EICRA |= (1 << ISC01);
-    EICRA &= ~(1 << ISC00);
-    EIMSK |= (1 << INT0);
+    DDRD &= ~((1<<PD2)|(1<<PD3)|(1<<PD4));
+    PORTD |= (1<<PD2)|(1<<PD3)|(1<<PD4);
 
-    // Taste Mitte на PD3
-    DDRD &= ~(1 << PD3);
-    PORTD |= (1 << PD3);
+    EICRA |= (1<<ISC01)|(1<<ISC11);
+    EIMSK |= (1<<INT0)|(1<<INT1);
 
-    // Ground Minuten PD6
-    DDRD |= (1 << PD6);
-    PORTD &= ~(1 << PD6);
-
-    // Ground Hours PD5
-    DDRD |= (1 << PD5);
-    PORTD &= ~(1 << PD5);
-
-    // Minutes: PD0, PD1, PD7 (001011)
-    DDRD |= (1 << PD0) | (1 << PD1) | (1 << PD7);
-
-    // Прерывание INT1 (для Taste Mitte)
-    EIMSK |= (1 << INT1);  // Iterapt Mask
-    EICRA |= (1 << ISC11); // Прерывание по спаду
-    EICRA &= ~(1 << ISC10);
-
-    // Button first PD4
-    DDRD &= ~(1 << PD4);
-    PORTD |= (1 << PD4);
-
-    // Запуск теста
     start_test();
+    timer2_init();
     sei();
 
-    // Запуск таймера
-    timer2_init();
-
-    while (1) {
-        // Кнопка PD4 → Time_addierung
-        if (!(PIND & (1 << PD4))){
-            _delay_ms(50);  // debounce 50 ms
-            if (!(PIND & (1 << PD4))) { 
+    while(1){
+        if (!(PIND & (1<<PD4))){
+            _delay_ms(50);
+            if (!(PIND & (1<<PD4))) { 
                 Time_addierung();
                 LEDS();
+                
             }
-            while (!(PIND & (1 << PD4))){  // ждем, пока кнопку отпустят
-                _delay_ms(50);  // debounce отпускания
-            }
+            while (!(PIND & (1<<PD4))) _delay_ms(10);
         }
-        // Если sleepflag = 1 → уходим в сон
-        else if (sleepflag) {
-            go_sleep();
-            //sleepflag = 0;
-        }
-        asm("nop");
+        else if (sleepflag) go_sleep();
+        else if (!sleepflag) software_pwm();
     }
 }
