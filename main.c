@@ -13,7 +13,7 @@ volatile uint8_t sleepflag       = 0;
 
 // Прерывание таймера 2 (CTC) — считает секунды
 ISR(TIMER2_COMPA_vect){
-    if(zustand_sekunds == 0b1){ // 0b111100
+    if(zustand_sekunds == 0b111100){ // 0b111100
         Time_addierung();
         if (!sleepflag)
         {
@@ -135,6 +135,9 @@ void confirmation(){
 // Прерывание INT0 (PD2) — переключение флага сна
 ISR(INT0_vect){
     sleepflag = !sleepflag;
+    if (!sleepflag){
+        LEDS();
+    }
 }
 
 // Функция ухода в сон
